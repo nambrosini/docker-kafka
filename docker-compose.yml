@@ -1,0 +1,149 @@
+version: '3'
+networks:
+  kafka-network:
+    name: kafka-network
+services:
+  zookeeper0:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 0
+      ZOOKEEPERS_SERVERS: zookeeper0:2888:3888;zookeeper1:2888:3888;zookeeper2:2888:3888
+    networks:
+      - kafka-network
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPERS_SERVERS: zookeeper0:2888:3888;zookeeper1:2888:3888;zookeeper2:2888:3888
+    networks:
+      - kafka-network
+  zookeeper2:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_SERVER_ID: 2
+      ZOOKEEPERS_SERVERS: zookeeper0:2888:3888;zookeeper1:2888:3888;zookeeper2:2888:3888
+    networks:
+      - kafka-network
+  kafka0:
+    image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - 9092:9092
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 0
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper0:2181,zookeeper1:2181,zookeeper2:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka0:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - kafka-network
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+  kafka1:
+    image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - 9192:9192
+      - 29192:29192
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper0:2181,zookeeper1:2181,zookeeper2:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:9192,PLAINTEXT_HOST://localhost:29192
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - kafka-network
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+  kafka2:
+    image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - 9292:9292
+      - 29292:29292
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper0:2181,zookeeper1:2181,zookeeper2:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:9292,PLAINTEXT_HOST://localhost:29292
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - kafka-network
+    depends_on:
+      - zookeeper0
+      - zookeeper1
+      - zookeeper2
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.4.0
+    hostname: schema-registry
+    depends_on:
+      - kafka0
+      - kafka1
+      - kafka2
+    ports:
+      - 8081:8081
+    networks:
+      - kafka-network
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka0:9092,kafka1:9192,kafka2:9292
+  kafka-connect:
+    image: confluentinc/cp-kafka-connect:7.4.0
+    container_name: kafka-connect
+    hostname: kafka-connect
+    #   restart: unless-stopped
+    #   command: echo "connect disabled"
+    depends_on:
+      - schema-registry
+    ports:
+      - 8083:8083
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    environment:
+      CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
+      CONNECT_BOOTSTRAP_SERVERS: kafka0:9092,kafka1:9192,kafka2:9292
+
+      CONNECT_GROUP_ID: cg_kafkatest
+      CONNECT_CONFIG_STORAGE_TOPIC: kafkatest_connect_config
+      CONNECT_OFFSET_STORAGE_TOPIC: kafkatest_connect_offsets
+      CONNECT_STATUS_STORAGE_TOPIC: kafkatest_connect_status
+
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.converters.ByteArrayConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.converters.ByteArrayConverter
+      CONNECT_INTERNAL_KEY_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+
+      CONNECT_PLUGIN_PATH: /usr/share/java,/etc/kafka-connect/uber/,/etc/kafka-connect/plugins,/usr/share/confluent-hub-components,/transforms
+
+      CONNECT_LOG4J_ROOT_LOGLEVEL: INFO
+      CONNECT_LOG4J_LOGGERS: org.reflections=ERROR
+
+      CONNECT_TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS: 30000
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 900000
+      CONNECT_CONSUMER_MAX_POLL_RECORDS: 500
+    volumes:
+      - ./jars:/etc/kafka-connect/uber/
+      - ./scripts:/scripts:rw
+      - ./transforms:/transforms:rw
+    command:
+      - bash
+      - -c
+      - |
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run & 
+        #
+        sleep infinity
+    networks:
+      - kafka-network

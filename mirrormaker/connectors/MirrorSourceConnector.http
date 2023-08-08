@@ -1,0 +1,15 @@
+POST http://localhost:8083/connectors HTTP/1.1
+Content-Type: application/json
+
+{
+    "name":"mirror-source",
+    "config": {
+        "connector.class": "org.apache.kafka.connect.mirror.MirrorSourceConnector",
+        "source.cluster.alias":"source",
+        "topics":"topic",
+        "source.cluster.bootstrap.servers":"kafka0:9092",
+        "target.cluster.bootstrap.servers":"kafka1:9192",
+        "producer.override.bootstrap.servers":"kafka1:9192",
+        "offset-syncs.topic.replication.factor":"1"
+    }
+}
